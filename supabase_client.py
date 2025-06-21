@@ -1,5 +1,3 @@
-# supabase_client.py
-
 import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -16,3 +14,7 @@ class SupabaseSingleton:
             key = os.getenv("SUPABASE_ANON_KEY")
             cls._instance = create_client(url, key)
         return cls._instance
+
+
+# Create and export the supabase client instance
+supabase: Client = SupabaseSingleton()
