@@ -22,32 +22,42 @@ CREATE TRIGGER update_users_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Function to handle user registration
-CREATE OR REPLACE FUNCTION handle_new_user()
+-- Function to handle new user creation
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.users (id, full_name, email)
-    VALUES (NEW.id, NEW.raw_user_meta_data->>'full_name', NEW.email);
+    INSERT INTO public.users (id, full_name, email, role)
+    VALUES (
+        NEW.id, 
+        COALESCE(NEW.raw_user_meta_data->>'full_name', ''), 
+        NEW.email,
+        'member'
+    );
     RETURN NEW;
+EXCEPTION
+    WHEN others THEN
+        -- Log the error but don't fail the auth creation
+        RAISE WARNING 'Failed to create user record: %', SQLERRM;
+        RETURN NEW;
 END;
-$$ language 'plpgsql' security definer;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger to automatically create user profile when auth user is created
+-- Trigger for new user creation
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
-    FOR EACH ROW
-    EXECUTE FUNCTION handle_new_user();
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Function to get user role for RLS
-CREATE OR REPLACE FUNCTION get_user_role(user_id UUID)
+-- Function to get user role
+CREATE OR REPLACE FUNCTION public.get_user_role(user_id UUID)
 RETURNS TEXT AS $$
 DECLARE
     user_role TEXT;
 BEGIN
     SELECT role INTO user_role
-    FROM users
+    FROM public.users
     WHERE id = user_id;
     
     RETURN COALESCE(user_role, 'anonymous');
 END;
-$$ language 'plpgsql' security definer; 
+$$ LANGUAGE plpgsql SECURITY DEFINER; 
